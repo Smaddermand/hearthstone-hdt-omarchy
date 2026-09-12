@@ -45,11 +45,17 @@ python3 hdt.py --prefix "$HOME/Games/my-hdt" install \
   --proton "$HOME/.local/share/Steam/compatibilitytools.d/GE-Proton11-6-x86_64"
 ```
 
-The installer copies the existing prefix, uses UMU's matched winetricks to install `dotnet48`, restores Windows 10 compatibility, installs the verified official portable HDT release, and configures the game path. It copies a small management script into the destination so the menu continues to work if the source repository moves.
+The installer copies the existing prefix, replaces Windows-file symlinks with writable local copies so native .NET can replace DLLs without modifying the shared Proton installation, uses UMU's matched winetricks to install `dotnet48`, restores Windows 10 compatibility, installs the verified official portable HDT release, and configures the game path. It copies a small management script into the destination so the menu continues to work if the source repository moves.
 
 `install --no-menu` skips desktop integration. `install --version 1.55.6` chooses a specific official stable release. The default install version is pinned to the tested release; the default update target is the latest upstream stable release.
 
-Installation failures leave the destination and `install.log` for inspection. An incomplete destination is never overwritten on retry. After inspecting it, remove that **new failed copy** yourself or choose another destination. There is no automatic repair or deletion of incomplete game environments.
+Installation failures leave the destination and `install.log` for inspection. Retry dependency setup in that incomplete copy with:
+
+```sh
+python3 hdt.py --prefix "$HOME/Games/hdt-release-test" install --resume
+```
+
+Use the same version and Proton options as the original installation. Resume preserves the copied game and appends to the log; it does not recopy the source. It is refused for completed installations and unmanaged directories. If the original copy operation itself was interrupted, choose a new destination instead. No environment is automatically deleted.
 
 ## Launch
 

@@ -175,6 +175,29 @@ def clone(source, dest):
             p.symlink_to(target)
 
 
+def prepare_dotnet_files(prefix):
+    """Native .NET replaces framework and system DLLs; never write through Proton links."""
+    root = prefix / 'drive_c/windows'
+    if root.is_symlink():
+        fail('Linked Windows directory is unsupported.')
+    for current, dirs, files in os.walk(root, followlinks=False):
+        folder = Path(current)
+        if any((folder / name).is_symlink() for name in dirs):
+            fail('Linked Windows subdirectory is unsupported.')
+        for name in files:
+            path = folder / name
+            if path.is_symlink():
+                local = path.with_name(path.name + '.local-' + uuid.uuid4().hex)
+                try:
+                    shutil.copy2(path, local)
+                    local.chmod(local.stat().st_mode | stat.S_IWUSR)
+                    local.replace(path)
+                finally:
+                    local.unlink(missing_ok=True)
+            elif path.is_file():
+                path.chmod(path.stat().st_mode | stat.S_IWUSR)
+
+
 def verify_dotnet(prefix):
     registry = (prefix / 'system.reg').read_text(errors='replace')
     key = r'Software\\Microsoft\\NET Framework Setup\\NDP\\v4\\Full'
@@ -233,8 +256,18 @@ def menu(prefix, info):
 def install(args, prefix):
     source = args.source.expanduser().resolve()
     proton = args.proton.expanduser().resolve()
-    if prefix.exists():
-        fail('Destination already exists; choose a new --prefix. Existing installs are never overwritten.')
+    previous = None
+    if args.resume:
+        marker = prefix / MARKER
+        if not marker.is_file():
+            fail('Resume requires an incomplete installation created by this tool.')
+        previous = json.loads(marker.read_text())
+        if previous.get('schema') != 1 or previous.get('status') != 'installing':
+            fail('Resume is allowed only for incomplete installations.')
+        if previous.get('proton') != str(proton) or previous.get('version') != args.version:
+            fail('Resume with the same --proton and --version used originally.')
+    elif prefix.exists():
+        fail('Destination already exists; choose a new --prefix or use install --resume for an incomplete installation.')
     if prefix.is_relative_to(source) or source.is_relative_to(prefix):
         fail('Source and destination must be separate directories.')
     for f in [source / GAME, source / BNET, proton / 'proton', proton / 'protonfixes/winetricks']:
@@ -254,16 +287,25 @@ def install(args, prefix):
     idle(source)
     with tempfile.TemporaryDirectory(prefix='hdt-download-') as tmp:
         tag, app = release(args.version, Path(tmp))
-        prefix.mkdir(mode=0o700)
-        info = {'schema': 1, 'status': 'installing', 'version': tag, 'proton': str(proton)}
-        atomic_json(prefix / MARKER, info)
-        print('Copying Battle.net environment. Keep the source closed until copying finishes.', flush=True)
-        clone(source, prefix)
-        os.chmod(prefix, 0o700)
-        atomic_json(prefix / MARKER, info)
+        if previous is None:
+            prefix.mkdir(mode=0o700)
+            info = {'schema': 1, 'status': 'installing', 'version': tag, 'proton': str(proton)}
+            atomic_json(prefix / MARKER, info)
+            print('Copying Battle.net environment. Keep the source closed until copying finishes.', flush=True)
+            clone(source, prefix)
+            os.chmod(prefix, 0o700)
+            atomic_json(prefix / MARKER, info)
+        else:
+            info = previous
+        prepare_dotnet_files(prefix)
         print('Installing Microsoft .NET 4.8 in the copy; this can take several minutes.', flush=True)
-        with (prefix / 'install.log').open('w') as log:
-            runtime(prefix, proton, ['winetricks', '-q', 'dotnet48'], log)
+        with (prefix / 'install.log').open('a') as log:
+            try:
+                verify_dotnet(prefix)
+            except (RuntimeError, FileNotFoundError):
+                runtime(prefix, proton, ['winetricks', '-q', 'dotnet48'], log)
+            else:
+                print('Microsoft .NET 4.8 is already verified; keeping it.', flush=True)
             runtime(prefix, proton, [prefix / 'drive_c/windows/system32/winecfg.exe', '-v', 'win10'], log)
         verify_dotnet(prefix)
         if (prefix / APP).exists():
@@ -403,6 +445,7 @@ def main(argv=None):
     ins.add_argument('--proton', type=Path, default=Path.home() / '.local/share/Steam/compatibilitytools.d' / TESTED_PROTON)
     ins.add_argument('--version', default=TESTED)
     ins.add_argument('--no-menu', action='store_true')
+    ins.add_argument('--resume', action='store_true', help='Retry dependency setup in an incomplete installation')
     la = sub.add_parser('launch')
     la.add_argument('--no-virtual-desktop', action='store_true')
     up = sub.add_parser('update')

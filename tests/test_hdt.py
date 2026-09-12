@@ -94,6 +94,27 @@ class Integration(unittest.TestCase):
         self.assertTrue((self.prefix / hdt.GAME).exists())
         self.assertEqual((self.source / hdt.DATA / 'decks.xml').read_text(), '<decks>keep me</decks>')
 
+    def test_existing_verified_dotnet_skips_winetricks(self):
+        self.fake_runtime(self.source, self.runner, [])
+        self.install()
+        self.assertEqual(self.runtime_mock.call_count, 1)
+        self.assertNotIn('winetricks', self.runtime_mock.call_args.args[2])
+
+    def test_resume_incomplete_install_without_recopying_game(self):
+        self.runtime_mock.side_effect = None
+        (self.source / 'system.reg').write_text('WINE REGISTRY Version 2\n')
+        with self.assertRaises(RuntimeError):
+            self.install()
+        sentinel = self.prefix / 'preserved.txt'
+        sentinel.write_text('do not recopy')
+        self.runtime_mock.side_effect = self.fake_runtime
+        with patch.object(hdt, 'clone', side_effect=AssertionError('Must not recopy')):
+            self.cli('install', '--resume', '--source', str(self.source), '--proton', str(self.runner))
+        self.assertEqual(sentinel.read_text(), 'do not recopy')
+        self.assertEqual(hdt.metadata(self.prefix)['status'], 'ready')
+        with self.assertRaisesRegex(RuntimeError, 'only for incomplete'):
+            self.cli('install', '--resume', '--source', str(self.source), '--proton', str(self.runner))
+
     def test_refuses_overwrite_and_nested_prefix(self):
         self.install()
         with self.assertRaisesRegex(RuntimeError, 'already exists'):
@@ -167,6 +188,26 @@ class Validation(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'Environment is in use'):
                 hdt.idle(prefix, root)
             hdt.idle(root / 'another-prefix', root)
+
+    def test_dotnet_preparation_does_not_change_shared_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shared = root / 'shared.dll'
+            shared.write_bytes(b'proton original')
+            shared.chmod(0o444)
+            prefix = root / 'prefix'
+            for directory, name in [('Microsoft.NET/Framework64/v4.0.30319', 'diasymreader.dll'),
+                                    ('system32', 'dxva2.dll')]:
+                target = prefix / 'drive_c/windows' / directory / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.symlink_to(shared)
+            hdt.prepare_dotnet_files(prefix)
+            for target in (prefix / 'drive_c/windows').rglob('*.dll'):
+                self.assertFalse(target.is_symlink())
+                self.assertTrue(target.stat().st_mode & 0o200)
+                target.write_bytes(b'native replacement')
+            self.assertEqual(shared.read_bytes(), b'proton original')
+            self.assertFalse(shared.stat().st_mode & 0o200)
 
     def test_archive_traversal_and_symlink_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
