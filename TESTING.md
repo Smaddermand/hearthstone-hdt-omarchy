@@ -2,7 +2,7 @@
 
 ## Results — 2026-09-12
 
-**This repository is an experimental prototype. Native .NET setup and completing installation via resume have been verified in a clean test copy. Gameplay through the generated installation remains unverified.**
+**This repository is an experimental prototype. Native .NET setup and completing installation via resume have been verified in a clean test copy. The user has confirmed gameplay through the generated installation; overlay issues remain. See the final rehearsal results below.**
 
 - 16 automated tests pass using Python's standard library. They exercise real filesystem copying, menu generation, staged updates, rollback, failed-update restoration, interrupted-transaction recovery, lock contention, protected native processes versus active Wine prefixes, archive rejection, checksum mismatch, monitor sizing and preservation of customized menu entries.
 - Wine/UMU execution and release downloads are simulated in those automated tests. The simulated newer version `1.55.7` is a fixture, not an assertion that an upstream release exists.
@@ -47,3 +47,15 @@ The new `install --resume` path completed HDT installation in that test copy, pr
 Regression tests cover replacing shared-file links without modifying their targets, skipping an already verified .NET installation, and resuming without recopying or overwriting a completed installation. All 16 tests pass.
 
 The subsequent UMU launch attempt returned without creating HDT logs in the agent environment, so HDT startup/gameplay on this freshly built prefix is still not validated. The disposable diagnostic copies and verbose logs were removed after testing. The user-created failed release-test prefix was retained for `install --resume`.
+
+## Real updater, rollback and uninstall rehearsal — 2026-09-12
+
+The user confirmed that the generated installation opens, tracks games and works in play. Overlay behavior remains buggy but manageable manually; it is an acknowledged limitation, not a resolved defect.
+
+A disposable copy of that installation was prepared with verified official portable HDT 1.55.5 files and matching version metadata. The actual CLI `update --version 1.55.6` completed using the official download and published SHA-256 digest. Every installed application file matched the extracted 1.55.6 release, and the complete tracker data file manifest remained byte-identical.
+
+The actual `rollback BACKUP_ID` restored all 1.55.5 application and tracker data files. A test-only data file created after upgrade was removed from the active profile and retained in the new pre-rollback backup, along with the 1.55.6 application. No transaction journal remained.
+
+The actual `menu` and `uninstall` commands were exercised with XDG_DATA_HOME pointed inside the disposable workspace. The test menu was removed; the copied game executable and all tracker data were preserved. The source installation's application files, tracker data, registries, management metadata and real menu entry matched their pre-test SHA-256 fingerprints.
+
+No HDT process or match was started during this rehearsal; it verifies actual release download, replacement, data preservation, rollback and removal rather than runtime behavior across a version change. All disposable copies, release downloads and private manifests were removed afterward.
