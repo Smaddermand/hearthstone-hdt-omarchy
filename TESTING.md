@@ -4,7 +4,7 @@
 
 **This repository is an experimental prototype. A successful fresh real installation is still unverified.**
 
-- 11 automated tests pass using Python's standard library. They exercise real filesystem copying, menu generation, staged updates, rollback, failed-update restoration, interrupted-transaction recovery, lock contention, archive rejection, checksum mismatch, monitor sizing and preservation of customized menu entries.
+- 13 automated tests pass using Python's standard library. They exercise real filesystem copying, menu generation, staged updates, rollback, failed-update restoration, interrupted-transaction recovery, lock contention, protected native processes versus active Wine prefixes, archive rejection, checksum mismatch, monitor sizing and preservation of customized menu entries.
 - Wine/UMU execution and release downloads are simulated in those automated tests. The simulated newer version `1.55.7` is a fixture, not an assertion that an upstream release exists.
 - A separate real installer attempt fetched and verified official HDT 1.55.6, cloned the original standalone Battle.net prefix with independent copy-on-write files, and invoked the matched winetricks through UMU using a disposable copy of the Steam runtime.
 - Inside the agent sandbox, the .NET setup did not finish even though the process reported success. Registry inspection caught the missing .NET installation. The installer now verifies the .NET 4.8 Release registry value before marking a destination ready; the incomplete real test prefix was correctly rejected and the existing working installation passed that same check.

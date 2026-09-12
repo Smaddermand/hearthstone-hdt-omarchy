@@ -144,6 +144,30 @@ class Integration(unittest.TestCase):
 
 
 class Validation(unittest.TestCase):
+    def test_process_scan_ignores_protected_native_app(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            proc = root / '99999999'
+            proc.mkdir()
+            (proc / 'comm').write_text('ssh-agent\n')
+            with patch.object(Path, 'read_bytes', side_effect=PermissionError):
+                hdt.idle(root / 'prefix', root)
+            (proc / 'comm').write_text('wineserver\n')
+            with patch.object(Path, 'read_bytes', side_effect=PermissionError):
+                with self.assertRaisesRegex(RuntimeError, 'Wine/game process wineserver'):
+                    hdt.idle(root / 'prefix', root)
+
+    def test_process_scan_blocks_only_matching_prefix(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            proc = root / '99999999'
+            proc.mkdir()
+            prefix = root / 'prefix'
+            (proc / 'environ').write_bytes(b'WINEPREFIX=' + os.fsencode(prefix) + b'\0')
+            with self.assertRaisesRegex(RuntimeError, 'Environment is in use'):
+                hdt.idle(prefix, root)
+            hdt.idle(root / 'another-prefix', root)
+
     def test_archive_traversal_and_symlink_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

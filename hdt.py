@@ -51,10 +51,10 @@ def version(value):
     return tuple(map(int, value.split('.')))
 
 
-def idle(prefix):
+def idle(prefix, proc_root=Path('/proc')):
     """Catch clients started outside our launcher too. Never print environments."""
     expected = prefix.resolve()
-    for proc in Path('/proc').iterdir():
+    for proc in proc_root.iterdir():
         if not proc.name.isdigit() or int(proc.name) == os.getpid():
             continue
         try:
@@ -64,7 +64,19 @@ def idle(prefix):
         except FileNotFoundError:
             continue
         except PermissionError:
-            fail('Cannot check a process owned by you. Close Wine applications before retrying.')
+            # Protected native programs can deny environ even to their owner.
+            # Only an uninspectable Wine/game process makes this check uncertain.
+            try:
+                name = (proc / 'comm').read_text().strip().lower()
+            except FileNotFoundError:
+                continue
+            except PermissionError:
+                fail(f'Cannot identify PID {proc.name}; cannot verify that the environment is idle.')
+            if (any(word in name for word in ('wine', 'proton', 'umu', 'hearthstone', 'battle.net'))
+                    or name.endswith('.exe')):
+                fail(f'Cannot inspect Wine/game process {name} (PID {proc.name}). '
+                     'Close that application before retrying.')
+            continue
         for field in fields:
             if field.startswith(b'WINEPREFIX='):
                 if Path(os.fsdecode(field.split(b'=', 1)[1])).resolve() == expected:
