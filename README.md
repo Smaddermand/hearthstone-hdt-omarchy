@@ -6,7 +6,7 @@ This project supplies the Linux integration only. It is independent of HearthSim
 
 ## Status
 
-Local experimental prototype, not a published release or AUR package. Occasional overlays appearing behind Hearthstone remain a known limitation. A monitor-sized Wine virtual desktop helped on the original machine; it does not guarantee correct stacking after every match.
+Experimental release **v0.1.0-alpha.1**, intended for early testing on Omarchy. This is not an AUR package. Occasional overlays appearing behind Hearthstone remain a known limitation. A monitor-sized Wine virtual desktop helped on the original machine; it does not guarantee correct stacking after every match.
 
 The original manually configured setup used HDT **1.55.6**, **GE-Proton11-6-x86_64**, **UMU 1.4.4**, and Microsoft **.NET Framework 4.8**. Game tracking and replay uploads worked there. Automated tests use simulated Windows-runtime calls; see [TESTING.md](TESTING.md) for the distinct limits of each test.
 
@@ -29,13 +29,15 @@ Install Hearthstone and verify it launches before continuing. Other layouts (Lut
 
 ## Install
 
-Close Battle.net, Hearthstone, HDT and their background Wine processes. Keep the source closed while copying. From this repository:
+Close Battle.net, Hearthstone, HDT and their background Wine processes. Keep the source closed while copying. Download the [experimental release](https://github.com/Smaddermand/hearthstone-hdt-omarchy/releases/tag/v0.1.0-alpha.1), or clone its tag:
 
 ```sh
+git clone --branch v0.1.0-alpha.1 https://github.com/Smaddermand/hearthstone-hdt-omarchy.git
+cd hearthstone-hdt-omarchy
 python3 hdt.py install
 ```
 
-This creates `~/Games/hearthstone-hdt-omarchy` and a **Hearthstone Deck Tracker (Omarchy)** application-menu entry. It does not overwrite an existing destination, including the earlier personal `~/Games/hearthstone-hdt` setup.
+This creates `~/Games/hearthstone-hdt-omarchy` and a **Hearthstone Deck Tracker (Omarchy)** application-menu entry. It refuses to overwrite an existing destination.
 
 To select another source, destination or installed runner:
 
@@ -52,7 +54,7 @@ The installer copies the existing prefix, replaces Windows-file symlinks with wr
 Installation failures leave the destination and `install.log` for inspection. Retry dependency setup in that incomplete copy with:
 
 ```sh
-python3 hdt.py --prefix "$HOME/Games/hdt-release-test" install --resume
+python3 hdt.py --prefix "$HOME/Games/hearthstone-hdt-omarchy" install --resume
 ```
 
 Use the same version and Proton options as the original installation. Resume preserves the copied game and appends to the log; it does not recopy the source. It is refused for completed installations and unmanaged directories. If the original copy operation itself was interrupted, choose a new destination instead. No environment is automatically deleted.
@@ -118,7 +120,7 @@ python3 -m unittest discover -s tests -v
 python3 -m py_compile hdt.py
 ```
 
-Only the Python standard library is required. See [TESTING.md](TESTING.md) for manual release checks. Publishing to GitHub and AUR packaging are separate future steps.
+Only the Python standard library is required. See [TESTING.md](TESTING.md) for manual release checks. AUR packaging is a possible future step.
 
 ## License and upstream projects
 

@@ -35,7 +35,8 @@ class Integration(unittest.TestCase):
         self.runtime_mock.side_effect = self.fake_runtime
         self.release = patch.object(hdt, 'release', side_effect=self.fake_release)
         self.release.start()
-        self.which = patch.object(hdt.shutil, 'which', return_value='/usr/bin/true')
+        real_which = hdt.shutil.which
+        self.which = patch.object(hdt.shutil, 'which', side_effect=lambda name: '/usr/bin/true' if name == 'umu-run' else real_which(name))
         self.which.start()
 
     def tearDown(self):
