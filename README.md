@@ -67,7 +67,7 @@ Use the menu, or:
 python3 hdt.py launch
 ```
 
-Start Hearthstone using HDT's button. The launcher opens only HDT. Monitor dimensions and scale come from Hyprland. Override with:
+Start Hearthstone using HDT's button. The launcher opens only HDT. Before launch it checks GitHub for a newer stable HDT release and sends a desktop notification if one is available. This check does not install updates. Offline or failed checks do not block HDT; network checking is limited to four seconds. Use `launch --no-update-check` to skip it. Results appear at the beginning of `launcher.log`. The upstream portable-discontinued prompt is separate and may still appear. Monitor dimensions and scale come from Hyprland. Override with:
 
 ```sh
 HDT_DESKTOP_SIZE=2560x1440 python3 hdt.py launch

@@ -30,6 +30,8 @@ class Integration(unittest.TestCase):
         (data / 'decks.xml').write_text('<decks>keep me</decks>')
         self.env = patch.dict(os.environ, {'XDG_DATA_HOME': str(self.root / 'desktop data')})
         self.env.start()
+        self.launch_check = patch.object(hdt, 'check_before_launch', return_value='No update (fixture)')
+        self.launch_check.start()
         self.runtime = patch.object(hdt, 'runtime')
         self.runtime_mock = self.runtime.start()
         self.runtime_mock.side_effect = self.fake_runtime
@@ -40,6 +42,7 @@ class Integration(unittest.TestCase):
         self.which.start()
 
     def tearDown(self):
+        self.launch_check.stop()
         self.which.stop()
         self.release.stop()
         self.runtime.stop()
@@ -209,6 +212,40 @@ class Validation(unittest.TestCase):
                 target.write_bytes(b'native replacement')
             self.assertEqual(shared.read_bytes(), b'proton original')
             self.assertFalse(shared.stat().st_mode & 0o200)
+
+    def test_launch_update_check_current_offline_and_timeout(self):
+        with patch.object(hdt, 'available_update', return_value=None):
+            self.assertIn('No newer', hdt.check_before_launch('1.55.6'))
+        with patch.object(hdt, 'available_update', side_effect=OSError('offline')):
+            self.assertIn('unavailable', hdt.check_before_launch('1.55.6'))
+        import threading
+        event = threading.Event()
+        with patch.object(hdt, 'available_update', side_effect=lambda _: event.wait(1)):
+            self.assertIn('timed out', hdt.check_before_launch('1.55.6', timeout=0.01))
+            event.set()
+
+    def test_launch_check_notifies_without_installing(self):
+        with patch.object(hdt, 'available_update', return_value='HDT 1.55.7 is available.'), \
+             patch.object(hdt.shutil, 'which', return_value='/usr/bin/notify-send'), \
+             patch.object(hdt.subprocess, 'run') as run:
+            self.assertIn('available', hdt.check_before_launch('1.55.6'))
+            self.assertEqual(run.call_count, 1)
+            self.assertEqual(run.call_args.args[0][0], 'notify-send')
+
+    def test_release_check_validates_portable_asset(self):
+        from unittest.mock import MagicMock
+        info = {'tag_name': 'v1.55.7', 'assets': []}
+        response = MagicMock()
+        response.__enter__.return_value = response
+        with patch.object(hdt.urllib.request, 'urlopen', return_value=response):
+            response.read.return_value = json.dumps(info).encode()
+            self.assertIn('no verified portable', hdt.available_update('1.55.6'))
+            info['assets'] = [{'name': 'Hearthstone.Deck.Tracker-v1.55.7.zip',
+                              'digest': 'sha256:' + 'a'*64,
+                              'browser_download_url': 'https://github.com/HearthSim/Hearthstone-Deck-Tracker/releases/download/v1.55.7/Hearthstone.Deck.Tracker-v1.55.7.zip'}]
+            response.read.return_value = json.dumps(info).encode()
+            self.assertIn('run the updater', hdt.available_update('1.55.6'))
+            self.assertIsNone(hdt.available_update('1.55.7'))
 
     def test_archive_traversal_and_symlink_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:

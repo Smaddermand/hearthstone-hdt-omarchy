@@ -13,6 +13,8 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
+import queue
 import time
 import urllib.request
 import uuid
@@ -416,6 +418,50 @@ def size():
     return selected
 
 
+def available_update(installed):
+    request = urllib.request.Request(API + 'latest', headers={'User-Agent': 'hearthstone-hdt-omarchy/0.1'})
+    with urllib.request.urlopen(request, timeout=3) as response:
+        info = json.loads(response.read(1024 * 1024))
+    tag = info['tag_name'].removeprefix('v')
+    if info.get('draft') or info.get('prerelease') or version(tag) <= version(installed):
+        return None
+    name = f'Hearthstone.Deck.Tracker-v{tag}.zip'
+    url = f'https://github.com/HearthSim/Hearthstone-Deck-Tracker/releases/download/v{tag}/{name}'
+    portable = any(a.get('name') == name and a.get('browser_download_url') == url
+                   and re.fullmatch(r'sha256:[0-9a-f]{64}', a.get('digest') or '')
+                   for a in info.get('assets', []))
+    if portable:
+        return f'HDT {tag} is available. Close HDT and Hearthstone, then run the updater to install it.'
+    return f'HDT {tag} is available, but has no verified portable download. Check the official HDT releases.'
+
+
+def check_before_launch(installed, timeout=4):
+    # A daemon prevents slow DNS or a stalled server from delaying launch indefinitely.
+    results = queue.Queue(maxsize=1)
+    def check():
+        try:
+            results.put(('ok', available_update(installed)))
+        except Exception:
+            results.put(('failed', None))
+    threading.Thread(target=check, daemon=True).start()
+    try:
+        status, message = results.get(timeout=timeout)
+    except queue.Empty:
+        return 'Update check timed out; starting HDT.'
+    if status == 'failed':
+        return 'Update check unavailable; starting HDT.'
+    if message is None:
+        return 'No newer stable HDT release found.'
+    if shutil.which('notify-send'):
+        try:
+            subprocess.run(['notify-send', '--app-name=Hearthstone Deck Tracker',
+                            'Hearthstone Deck Tracker update', message], timeout=2, check=False,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return message
+
+
 def launch(args, prefix):
     info = metadata(prefix)
     proton = Path(info['proton'])
@@ -433,6 +479,8 @@ def launch(args, prefix):
     if not args.no_virtual_desktop:
         invocation = [str(prefix / 'drive_c/windows/explorer.exe'), '/desktop=HearthstoneHDT,' + size(), *invocation]
     with log.open('w') as out:
+        if not args.no_update_check:
+            print(check_before_launch(info['version']), file=out, flush=True)
         runtime(prefix, proton, invocation, out)
 
 
@@ -448,6 +496,7 @@ def main(argv=None):
     ins.add_argument('--resume', action='store_true', help='Retry dependency setup in an incomplete installation')
     la = sub.add_parser('launch')
     la.add_argument('--no-virtual-desktop', action='store_true')
+    la.add_argument('--no-update-check', action='store_true', help='Skip the pre-launch update check')
     up = sub.add_parser('update')
     up.add_argument('--version', default='latest')
     rb = sub.add_parser('rollback')
